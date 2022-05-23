@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENCED
+// SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.4;
 
 import "./Swap.sol";
