@@ -1,6 +1,6 @@
-# Deversifi's Public contracts
+# rhino.fi's Public contracts
 
-Pure solidity repository of Deversifi's contracts. No dependencies are included and may be required for compilation of the contracts (openzepplin's contracts)
+Pure solidity repository of rhino.fi's contracts. No dependencies are included and may be required for compilation of the contracts (openzepplin's contracts)
 
 ## Bridge
 
