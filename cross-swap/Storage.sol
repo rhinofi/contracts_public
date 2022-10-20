@@ -18,4 +18,10 @@ abstract contract Storage {
   mapping(bytes32 => bool) internal uniqueIds;
 
   uint256[MAX_GAP - 1] private __gap;
+
+  modifier withUniqueId(bytes32 id) {
+    require(uniqueIds[id] == false, "DUPLICATE_ID");
+    uniqueIds[id] = true;
+    _;
+  }
 }

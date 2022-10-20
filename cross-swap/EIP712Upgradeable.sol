@@ -4,7 +4,7 @@
 
 pragma solidity ^0.8.4;
 
-import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol";
+import "./libs/ECDSAUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /**
@@ -51,10 +51,17 @@ abstract contract EIP712Upgradeable is Initializable {
     }
 
     function __EIP712_init_unchained(string memory name, string memory version) internal onlyInitializing {
-        bytes32 hashedName = keccak256(bytes(name));
-        bytes32 hashedVersion = keccak256(bytes(version));
-        _HASHED_NAME = hashedName;
-        _HASHED_VERSION = hashedVersion;
+      updateEip712(name, version);
+    }
+
+    function updateEip712(
+      string memory name,
+      string memory version
+    ) internal {
+      bytes32 hashedName = keccak256(bytes(name));
+      bytes32 hashedVersion = keccak256(bytes(version));
+      _HASHED_NAME = hashedName;
+      _HASHED_VERSION = hashedVersion;
     }
 
     /**

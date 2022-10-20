@@ -6,13 +6,29 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "./Storage.sol";
 import "./DVFAccessControl.sol";
+import "./EIP712Upgradeable.sol";
 
-abstract contract UserWallet is Storage, DVFAccessControl {
+abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
   event BalanceUpdated(address indexed user, address indexed token, uint256 newBalance);
   event Deposit(address indexed user, address indexed token, uint256 amount);
   event Withdraw(address indexed user, address indexed token, uint256 amount);
+  event DelegatedWithdraw(bytes32 id, address indexed user, address indexed token, uint256 amount);
+
+  bytes32 public constant _WITHDRAW_TYPEHASH =
+   keccak256("Withdraw(address user,address token,address to,uint256 amount,uint256 maxFee,uint256 nonce,uint256 deadline,uint256 chainId)");
+
+  struct WithdrawConstraints {
+    address user;
+    address token;
+    address to;
+    uint256 amount;
+    uint256 maxFee;
+    uint256 nonce;
+    uint256 deadline;
+    uint256 chainId;
+  }
 
   /**
    * @dev Deposit tokens directly into this contract
@@ -51,6 +67,30 @@ abstract contract UserWallet is Storage, DVFAccessControl {
     _withdraw(msg.sender, _token, amount, msg.sender);
 
     emit Withdraw(msg.sender, _token, amount);
+  }
+
+  /**
+   * @dev Delegated withdraw to withdraw funds on a user's behalf
+   * with a valid signature
+   */
+  function withdraw(
+    WithdrawConstraints calldata constraints,
+    uint256 feeTaken,
+    bytes32 withdrawalId,
+    bytes memory signature
+  ) external onlyRole(OPERATOR_ROLE) withUniqueId(withdrawalId) {
+    ensureDeadline(constraints.deadline);
+    require(feeTaken <= constraints.maxFee, 'FEE_TOO_HIGH');
+
+    verifyWithdrawSignature(constraints, signature);
+
+    _withdraw(constraints.user, constraints.token, constraints.amount, constraints.to);
+
+    // Pay the fee to our liquidity pool
+    transfer(constraints.user, constraints.token, address(this), feeTaken);
+
+    // TODO find a way to merge this with withdraw
+    emit DelegatedWithdraw(withdrawalId, constraints.user, constraints.token, constraints.amount);
   }
 
   /**
@@ -135,5 +175,41 @@ abstract contract UserWallet is Storage, DVFAccessControl {
 
   function _contractBalance(IERC20Upgradeable token) internal view returns (uint256) {
     return token.balanceOf(address(this));
+  }
+
+  /**
+   * @dev Signature validation for the WithdrfawConstraints
+   */
+  function verifyWithdrawSignature(
+    WithdrawConstraints calldata withdrawConstraints,
+    bytes memory signature
+  ) private {
+    require(withdrawConstraints.nonce > userNonces[withdrawConstraints.user], "NONCE_ALREADY_USED");
+    require(withdrawConstraints.chainId == block.chainid, "INVALID_CHAIN");
+
+    bytes32 structHash = _hashTypedDataV4(keccak256(
+      abi.encode(
+        _WITHDRAW_TYPEHASH,
+        withdrawConstraints.user,
+        withdrawConstraints.token,
+        withdrawConstraints.to,
+        withdrawConstraints.amount,
+        withdrawConstraints.maxFee,
+        withdrawConstraints.nonce,
+        withdrawConstraints.deadline,
+        withdrawConstraints.chainId
+      )
+    ));
+
+    address signer = ECDSAUpgradeable.recover(structHash, signature);
+    require(signer == withdrawConstraints.user, "INVALID_SIGNATURE");
+
+    userNonces[withdrawConstraints.user] = withdrawConstraints.nonce;
+  }
+
+  // TODO de-duplicate and move to a library
+  function ensureDeadline(uint256 deadline) internal view {
+    // solhint-disable-next-line not-rely-on-time
+    require(block.timestamp <= deadline, "DEADLINE_EXPIRED");
   }
 }
