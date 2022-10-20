@@ -4,12 +4,12 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "./EIP712Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol";
+import "./libs/ECDSAUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "./Storage.sol";
 import "./UserWallet.sol";
 
-abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
+abstract contract Swap is Storage, UserWallet {
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
   bytes32 public constant DEVERSIFI_GATEWAY = "DeversifiGateway";
@@ -35,12 +35,6 @@ abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
    address indexed tokenFrom, uint256 amountFrom, address indexed tokenTo,
    uint256 amountTo, uint256 amountToFee, bool fundsBridged);
 
-  modifier withUniqueSwapId(bytes32 swapId) {
-    require(uniqueIds[swapId] == false, "DUPLICATE_ID");
-    _;
-    uniqueIds[swapId] = true;
-  }
-
   // solhint-disable-next-line func-name-mixedcase
   function __Swap_init(
     address _paraswap,
@@ -48,13 +42,13 @@ abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
   ) internal onlyInitializing {
     paraswap = _paraswap;
     paraswapTransferProxy = _paraswapTransferProxy;
-    __EIP712_init("DeversiFi Cross Chain Swap", "1");
+    __EIP712_init("RhinoFi Cross Chain Swap", "1");
   }
 
   function setParaswapAddresses(
     address _paraswap,
     address _paraswapTransferProxy
-  ) external onlyRole(OPERATOR_ROLE) {
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
     paraswap = _paraswap;
     paraswapTransferProxy = _paraswapTransferProxy;
   }
@@ -64,7 +58,7 @@ abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
     bytes32 swapId,
     bytes memory signature,
     bytes memory data
-  ) external onlyRole(OPERATOR_ROLE) withUniqueSwapId(swapId) {
+  ) external onlyRole(OPERATOR_ROLE) withUniqueId(swapId) {
     ensureDeadline(swapConstraints.deadline);
 
     verifySwapSignature(swapConstraints, signature);
@@ -84,7 +78,7 @@ abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
     SwapConstraints calldata swapConstraints,
     bytes32 swapId,
     bytes memory data
-  ) external onlyRole(LIQUIDITY_SPENDER_ROLE) withUniqueSwapId(swapId) {
+  ) external onlyRole(LIQUIDITY_SPENDER_ROLE) withUniqueId(swapId) {
     ensureDeadline(swapConstraints.deadline);
     // Currently transfers from this contract's vault
     // We can also place them in operator's vault and use msg.sender
@@ -183,10 +177,5 @@ abstract contract Swap is Storage, UserWallet, EIP712Upgradeable {
     require(signer == swapConstraints.user, "INVALID_SIGNATURE");
 
     userNonces[swapConstraints.user] = swapConstraints.nonce;
-  }
-
-  function ensureDeadline(uint256 deadline) private view {
-    // solhint-disable-next-line not-rely-on-time
-    require(block.timestamp <= deadline, "DEADLINE_EXPIRED");
   }
 }
