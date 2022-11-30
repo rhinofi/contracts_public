@@ -17,7 +17,12 @@ abstract contract Storage {
 
   mapping(bytes32 => bool) internal uniqueIds;
 
-  uint256[MAX_GAP - 1] private __gap;
+    // UserAddress => TokenAddress => Emergency Withdrawal timestamp
+  mapping(address => mapping(address => uint256)) public emergencyWithdrawalRequests;
+
+  uint256 public withdrawalDelay;
+
+  uint256[MAX_GAP - 3] private __gap;
 
   modifier withUniqueId(bytes32 id) {
     require(uniqueIds[id] == false, "DUPLICATE_ID");

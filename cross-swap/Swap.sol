@@ -43,6 +43,7 @@ abstract contract Swap is Storage, UserWallet {
     paraswap = _paraswap;
     paraswapTransferProxy = _paraswapTransferProxy;
     __EIP712_init("RhinoFi Cross Chain Swap", "1");
+    __UserWallet_Init();
   }
 
   function setParaswapAddresses(
