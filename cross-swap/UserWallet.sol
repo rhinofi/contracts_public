@@ -15,9 +15,12 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   event Deposit(address indexed user, address indexed token, uint256 amount);
   event Withdraw(address indexed user, address indexed token, uint256 amount);
   event DelegatedWithdraw(bytes32 id, address indexed user, address indexed token, uint256 amount);
+  event LogEmergencyWithdrawalRequested(address indexed user, address indexed token);
+  event LogEmergencyWithdrawalSettled(address indexed user, address indexed token);
 
   bytes32 public constant _WITHDRAW_TYPEHASH =
    keccak256("Withdraw(address user,address token,address to,uint256 amount,uint256 maxFee,uint256 nonce,uint256 deadline,uint256 chainId)");
+  uint256 public constant MAX_WITHDRAWAL_DELAY = 24 hours;
 
   struct WithdrawConstraints {
     address user;
@@ -30,6 +33,10 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
     uint256 chainId;
   }
 
+  function __UserWallet_Init() public onlyInitializing {
+      withdrawalDelay = MAX_WITHDRAWAL_DELAY;
+  }
+  
   /**
    * @dev Deposit tokens directly into this contract
    */
@@ -58,15 +65,6 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
     uint256 amountAdded = _contractBalance(token) - balanceBefore;
 
     _increaseBalance(_token, to, amountAdded);
-  }
-
-  /**
-   * @dev Withdraw funds directly from this contract for yourself
-   */
-  function withdraw(address _token, uint256 amount) external {
-    _withdraw(msg.sender, _token, amount, msg.sender);
-
-    emit Withdraw(msg.sender, _token, amount);
   }
 
   /**
@@ -178,7 +176,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   }
 
   /**
-   * @dev Signature validation for the WithdrfawConstraints
+   * @dev Signature validation for the WithdrawConstraints
    */
   function verifyWithdrawSignature(
     WithdrawConstraints calldata withdrawConstraints,
@@ -211,5 +209,44 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   function ensureDeadline(uint256 deadline) internal view {
     // solhint-disable-next-line not-rely-on-time
     require(block.timestamp <= deadline, "DEADLINE_EXPIRED");
+  }
+
+  /**
+   * @dev Set the 2 step withdrawal required delay, by default 24 hours  
+   */
+  function setEmergencyWithdrawalDelay(uint256 delay) external onlyRole(OPERATOR_ROLE){
+    require(delay <= MAX_WITHDRAWAL_DELAY, 'WITHDRAWAL_DELAY_OVER_MAX');
+    withdrawalDelay = delay;
+  }
+
+  /**
+   * @dev Start emergency withdrawal
+   *      Records the current timestamp, when the time elapsed exceeds ${withdrawalDelay} 
+   *      funds can be requested via settleEmergencyWithdrawal
+   */
+  function requestEmergencyWithdrawal(address _token) external {
+    emergencyWithdrawalRequests[msg.sender][_token] = block.timestamp;
+    emit LogEmergencyWithdrawalRequested(msg.sender, _token);
+  }
+
+  /**
+   * @dev Settle emergency withdrawal
+   *      Withdraws all funds from the specified _token
+   *      Balance for this token will be set to 0
+   *      Emergency withdrawal timer will be reset
+   */
+  function settleEmergencyWithdrawal(address _token) external {
+    address sender = msg.sender;
+    {
+      uint256 requestTimestamp = emergencyWithdrawalRequests[sender][_token];
+      emergencyWithdrawalRequests[sender][_token] = 0;
+      require(requestTimestamp > 0, "EMERGENCY_WITHDRAWAL_NOT_REQUESTED");
+      require(requestTimestamp + withdrawalDelay < block.timestamp, "EMERGENCY_WITHDRAWAL_STILL_IN_PROGRESS");
+    }
+    {
+      uint256 balance = userBalances[sender][_token];
+      _withdraw(sender, _token, balance, sender);
+    }
+    emit LogEmergencyWithdrawalSettled(sender, _token);
   }
 }
