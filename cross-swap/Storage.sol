@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.4;
 
+import "./Relayer.sol";
+
 abstract contract Storage {
   uint256 private constant MAX_GAP = 2**32;
 
@@ -22,10 +24,12 @@ abstract contract Storage {
 
   uint256 public withdrawalDelay;
 
-  uint256[MAX_GAP - 3] private __gap;
+  Relayer public relayer;
+
+  uint256[MAX_GAP - 4] private __gap;
 
   modifier withUniqueId(bytes32 id) {
-    require(uniqueIds[id] == false, "DUPLICATE_ID");
+    require(!uniqueIds[id], "DUPLICATE_ID");
     uniqueIds[id] = true;
     _;
   }

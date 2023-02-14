@@ -9,8 +9,12 @@ import "./Swap.sol";
 contract DVFCrossSwap is Swap {
   // constructor() initializer { }
 
-  function initialize(address admin, address paraswap, address paraswapTransferProxy) external initializer {
-    __DVFAccessControl_init(admin);
-    __Swap_init(paraswap, paraswapTransferProxy);
+  function initialize(
+    address _admin,
+    address _paraswap,
+    address _paraswapTransferProxy
+  ) external initializer {
+    __DVFAccessControl_init(_admin);
+    __Swap_init(_admin, _paraswap, _paraswapTransferProxy);
   }
 }
