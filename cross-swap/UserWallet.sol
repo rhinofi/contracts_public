@@ -37,6 +37,11 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
       withdrawalDelay = MAX_WITHDRAWAL_DELAY;
   }
   
+  function _accountingSanityCheck(address token, string memory failureMessage) internal view {
+      require(
+        _contractBalance(IERC20Upgradeable(token)) >= tokenReserves[token],
+        failureMessage);
+  }
   /**
    * @dev Deposit tokens directly into this contract
    */
@@ -62,9 +67,9 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
 
     uint256 balanceBefore = _contractBalance(token);
     token.safeTransferFrom(msg.sender, address(this), amount);
-    uint256 amountAdded = _contractBalance(token) - balanceBefore;
-
-    _increaseBalance(_token, to, amountAdded);
+    uint256 balanceAfter = _contractBalance(token);
+    _increaseBalance(_token, to, balanceAfter - balanceBefore);
+    _accountingSanityCheck(_token, "DEPOSIT_TO_ACCOUNTING_FAILURE");
   }
 
   /**
@@ -82,10 +87,10 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
 
     verifyWithdrawSignature(constraints, signature);
 
-    _withdraw(constraints.user, constraints.token, constraints.amount, constraints.to);
-
     // Pay the fee to our liquidity pool
     transfer(constraints.user, constraints.token, address(this), feeTaken);
+
+    _withdraw(constraints.user, constraints.token, constraints.amount, constraints.to);
 
     // TODO find a way to merge this with withdraw
     emit DelegatedWithdraw(withdrawalId, constraints.user, constraints.token, constraints.amount);
@@ -107,16 +112,16 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
 
     IERC20Upgradeable token = IERC20Upgradeable(_token);
 
-    token.safeTransfer(to, amount);
-
     _decreaseBalance(_token, user, amount);
+
+    token.safeTransfer(to, amount);
+    _accountingSanityCheck(_token, "WITHDRAW_ACCOUNTING_FAILURE");
   }
 
-  /**
-   * @dev Transfer funds internally between two users
-   */
-  function transferTo(address token, address to, uint256 amount) external {
-    transfer(msg.sender, token, to, amount);
+  function transfer(address user, address[] memory tokens, address to, uint256[] memory amounts) internal {
+    for(uint i=0; i<tokens.length; i++) {
+      transfer(user, tokens[i], to, amounts[i]);
+    }
   }
 
   function transfer(address user, address token, address to, uint256 amount) internal {
@@ -152,7 +157,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
    */
   function skim(address _token, address to) external onlyRole(OPERATOR_ROLE) {
     IERC20Upgradeable token = IERC20Upgradeable(_token);
-    uint256 currentBalance = token.balanceOf(address(this));
+    uint256 currentBalance = _contractBalance(token);
     require(currentBalance > tokenReserves[_token], "NOTHING_TO_SKIM");
 
     token.safeTransfer(to, currentBalance - tokenReserves[_token]);
@@ -163,7 +168,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
    */
   function skimToContract(address _token) external {
     IERC20Upgradeable token = IERC20Upgradeable(_token);
-    uint256 currentBalance = token.balanceOf(address(this));
+    uint256 currentBalance = _contractBalance(token);
     require(currentBalance > tokenReserves[_token], "NOTHING_TO_SKIM");
 
     uint256 amountAdded = currentBalance - tokenReserves[_token];
@@ -214,7 +219,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   /**
    * @dev Set the 2 step withdrawal required delay, by default 24 hours  
    */
-  function setEmergencyWithdrawalDelay(uint256 delay) external onlyRole(OPERATOR_ROLE){
+  function setEmergencyWithdrawalDelay(uint256 delay) external onlyRole(DEFAULT_ADMIN_ROLE){
     require(delay <= MAX_WITHDRAWAL_DELAY, 'WITHDRAWAL_DELAY_OVER_MAX');
     withdrawalDelay = delay;
   }
