@@ -5,6 +5,7 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 ## Latest Deployed Versions
 
 #### Ethereum Mainnet
+- Deposit proxy - [0xeD9d63a96c27f87B07115b56b2e3572827f21646](https://etherscan.io/address/0xeD9d63a96c27f87B07115b56b2e3572827f21646)
 - StarkEx Bridge - [0x5d22045daceab03b158031ecb7d9d06fad24609b](https://etherscan.io/address/0x5d22045daceab03b158031ecb7d9d06fad24609b)
 - Fast Withdrawal Transfer Proxy - [0xc3ca38091061e3e5358a52d74730f16c60ca9c26](https://etherscan.io/address/0xc3ca38091061e3e5358a52d74730f16c60ca9c26)
 - DA Committee - [0x28780349a33eee56bb92241baab8095449e24306](https://etherscan.io/address/0x28780349a33eee56bb92241baab8095449e24306)
@@ -12,6 +13,10 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - xDVF Token - [0xdddd0e38d30dd29c683033fa0132f868597763ab](https://etherscan.io/token/0xdddd0e38d30dd29c683033fa0132f868597763ab)
 - DAO - [0x4788Aa3bECBf5f7c9Fd058372b4a3FC7C75DF201](https://etherscan.io/address/0x4788Aa3bECBf5f7c9Fd058372b4a3FC7C75DF201)
 - DAO Vested Treasury - [0x65d57b1e6570f5c636b8dd64c186ac304a4c0ce9](https://etherscan.io/address/0x65d57b1e6570f5c636b8dd64c186ac304a4c0ce9)
+- AMM factory - [0x1264f802364E0776b9A9e3d161B43c7333aC08b2](https://etherscan.io/address/0x1264f802364E0776b9A9e3d161B43c7333aC08b2)
+- AMM router - [0xDD1891fea0446f56726d4c4eDFc11cA13F943CA2](https://etherscan.io/address/0xDD1891fea0446f56726d4c4eDFc11cA13F943CA2)
+- AMM LP Proxy beacon - [0x0bCa65bf4b4c8803d2f0B49353ed57CAAF3d66Dc](https://etherscan.io/address/0x0bCa65bf4b4c8803d2f0B49353ed57CAAF3d66Dc)
+- AMM LP implmementation - [0x329F5a8d24503fC00B31b229835b6452A6723ae4](https://etherscan.io/address/0x329F5a8d24503fC00B31b229835b6452A6723ae4)
 
 #### Arbitrum
 - Bridge - [0x10417734001162ea139e8b044dfe28dbb8b28ad0](https://arbiscan.io/address/0x10417734001162ea139e8b044dfe28dbb8b28ad0)
