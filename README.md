@@ -34,7 +34,7 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - Bridge - [0xba4eee20f434bc3908a0b18da496348657133a7e](https://polygonscan.com/address/0xba4eee20f434bc3908a0b18da496348657133a7e)
 - Cross-Swap wallet - [0xda7EeB4049dA84596937127855B50271ad1687E7](https://polygonscan.com/address/0xda7eeb4049da84596937127855b50271ad1687e7)
 - MultiSig - [0x249aAbb1d67A76404Cc1197fa37ADAf358B1E212](https://polygonscan.com/address/0x249aAbb1d67A76404Cc1197fa37ADAf358B1E212)
-- Timelock - [0x6aF2fD733aCF215684700a616395D2825df83f402](https://polygonscan.com/address/0x6aF2fD733aCF215684700a616395D2825df83f402)
+- Timelock - [0x6aF2fD733aCF215684700a616395D2825df83f40](https://polygonscan.com/address/0x6aF2fD733aCF215684700a616395D2825df83f40)
 
 #### zkSync
 - Bridge [0x1fa66e2B38d0cC496ec51F81c3e05E6A6708986F](https://explorer.zksync.io/address/0x1fa66e2B38d0cC496ec51F81c3e05E6A6708986F)
