@@ -2,16 +2,14 @@
 pragma solidity ^0.8.4;
 
 import "./VM.sol";
-import "hardhat/console.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./../TransferableAccessControl.sol";
 
-contract RhinoVM is VM, AccessControl {
+contract RhinoVM is VM, TransferableAccessControl {
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    constructor(address admin, address operator) {
+    constructor(address admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(OPERATOR_ROLE, address(this));
-        _grantRole(OPERATOR_ROLE, operator);
     }
 
     function executeRawCalldata(address target, bytes calldata data) 
