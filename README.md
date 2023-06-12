@@ -48,6 +48,12 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - MultiSig - N/A
 - Timelock - N/A
 
+#### Optimism
+- Bridge [0x0bCa65bf4b4c8803d2f0B49353ed57CAAF3d66Dc](https://optimistic.etherscan.io/address/0x0bca65bf4b4c8803d2f0b49353ed57caaf3d66dc)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
 ## Cross-Swap Wallet
 
 rhino.fi deploys this self-custodial smart-wallet on several chains, and it holds tokens on behalf of users. rhino.fi can broadcast meta-transactions signed by users in order to swap via aggregators such as Paraswap or invest into yield opportunities such as via Beefy Finance.
