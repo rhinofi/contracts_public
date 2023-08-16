@@ -54,6 +54,18 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - MultiSig - N/A
 - Timelock - N/A
 
+#### Linea
+- Bridge [0xcF68a2721394dcf5dCF66F6265C1819720F24528](https://explorer.linea.build/address/0xcF68a2721394dcf5dCF66F6265C1819720F24528)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
+#### Base
+- Bridge [0x2f59E9086ec8130E21BD052065a9E6B2497bb102](https://basescan.org/address/0x2f59E9086ec8130E21BD052065a9E6B2497bb102)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
 ## Cross-Swap Wallet
 
 rhino.fi deploys this self-custodial smart-wallet on several chains, and it holds tokens on behalf of users. rhino.fi can broadcast meta-transactions signed by users in order to swap via aggregators such as Paraswap or invest into yield opportunities such as via Beefy Finance.
