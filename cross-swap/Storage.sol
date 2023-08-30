@@ -6,6 +6,9 @@ import "./Relayer.sol";
 abstract contract Storage {
   uint256 private constant MAX_GAP = 2**32;
 
+  uint256 private constant INITIAL_WORD_COUNT = 5;
+  uint256 private constant CURRENT_WORD_COUNT = 9; 
+
   // UserAddress => TokenAddress => amount
   mapping(address => mapping(address => uint256)) public userBalances;
 
@@ -26,7 +29,7 @@ abstract contract Storage {
 
   Relayer public relayer;
 
-  uint256[MAX_GAP - 4] private __gap;
+  uint256[MAX_GAP - (CURRENT_WORD_COUNT - INITIAL_WORD_COUNT)] private __gap;
 
   modifier withUniqueId(bytes32 id) {
     require(!uniqueIds[id], "DUPLICATE_ID");

@@ -4,11 +4,13 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "./Storage.sol";
 import "./DVFAccessControl.sol";
 import "./EIP712Upgradeable.sol";
 
-abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
+abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable, ReentrancyGuardUpgradeable {
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
   event BalanceUpdated(address indexed user, address indexed token, uint256 newBalance);
@@ -37,9 +39,13 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
       withdrawalDelay = MAX_WITHDRAWAL_DELAY;
   }
   
+  function emitBalanceUpdated(address user, address token) internal {
+    emit BalanceUpdated(user, token, userBalances[user][token]);
+  }
+
   function _accountingSanityCheck(address token, string memory failureMessage) internal view {
       require(
-        _contractBalance(IERC20Upgradeable(token)) >= tokenReserves[token],
+        _contractBalance(token) >= tokenReserves[token],
         failureMessage);
   }
   /**
@@ -62,14 +68,13 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   /**
    * @dev Deposit tokens directly into this contract and credit {to}
    */
-  function depositTo(address to, address _token, uint256 amount) public {
-    IERC20Upgradeable token = IERC20Upgradeable(_token);
-
+  function depositTo(address to, address token, uint256 amount) public nonReentrant {
     uint256 balanceBefore = _contractBalance(token);
-    token.safeTransferFrom(msg.sender, address(this), amount);
+    IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
     uint256 balanceAfter = _contractBalance(token);
-    _increaseBalance(_token, to, balanceAfter - balanceBefore);
-    _accountingSanityCheck(_token, "DEPOSIT_TO_ACCOUNTING_FAILURE");
+    _increaseBalance(token, to, balanceAfter - balanceBefore);
+    _accountingSanityCheck(token, "DEPOSIT_TO_ACCOUNTING_FAILURE");
+    emitBalanceUpdated(to, token);
   }
 
   /**
@@ -92,6 +97,8 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
 
     _withdraw(constraints.user, constraints.token, constraints.amount, constraints.to);
 
+    emitBalanceUpdated(address(this), constraints.token);
+    emitBalanceUpdated(constraints.user, constraints.token);
     // TODO find a way to merge this with withdraw
     emit DelegatedWithdraw(withdrawalId, constraints.user, constraints.token, constraints.amount);
   }
@@ -100,11 +107,24 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
    * @dev Withdraw funds directly from this contract from liquidity pool
    */
   function withdrawFromContract(
-    address _token,
+    address token,
     uint256 amount,
     address to
+  ) public onlyRole(LIQUIDITY_SPENDER_ROLE) {
+    _withdraw(address(this), token, amount, to);
+    emitBalanceUpdated(address(this), token);
+  }
+
+  /**
+   * @dev Withdraw all funds creditted to this contract
+   */
+  function withdrawFromContract(
+    address [] calldata  tokens,
+    address to
   ) external onlyRole(LIQUIDITY_SPENDER_ROLE) {
-    _withdraw(address(this), _token, amount, to);
+    for(uint i=0; i<tokens.length; i++) {
+      withdrawFromContract(tokens[i], userBalances[address(this)][tokens[i]], to);
+    }
   }
 
   function _withdraw(address user, address _token, uint256 amount, address to) internal {
@@ -118,34 +138,39 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
     _accountingSanityCheck(_token, "WITHDRAW_ACCOUNTING_FAILURE");
   }
 
-  function transfer(address user, address[] memory tokens, address to, uint256[] memory amounts) internal {
-    for(uint i=0; i<tokens.length; i++) {
-      transfer(user, tokens[i], to, amounts[i]);
-    }
-  }
-
   function transfer(address user, address token, address to, uint256 amount) internal {
     _ensureUserBalance(user, token, amount);
     userBalances[user][token] -= amount;
     userBalances[to][token] += amount;
+  }
 
-
-    emit BalanceUpdated(user, token, userBalances[user][token]);
-    emit BalanceUpdated(to, token, userBalances[to][token]);
+   /**
+   * @dev Transfer the specified list of tokens 
+   *      from the cross-swap contract to the provided address
+   */
+  function transfer(
+    address [] calldata  tokens,
+    address to
+  ) external onlyRole(LIQUIDITY_SPENDER_ROLE) {
+    for(uint i=0; i<tokens.length; i++) {
+      transfer(
+        address(this),
+        tokens[i],
+        to,
+        userBalances[address(this)][tokens[i]]);
+      emitBalanceUpdated(address(this), tokens[i]);
+      emitBalanceUpdated(to, tokens[i]);
+    }
   }
 
   function _increaseBalance(address token, address user, uint256 amount) internal {
     userBalances[user][token] += amount;
     tokenReserves[token] += amount;
-
-    emit BalanceUpdated(user, token, userBalances[user][token]);
   }
 
   function _decreaseBalance(address token, address user, uint256 amount) internal {
     userBalances[user][token] -= amount;
     tokenReserves[token] -= amount;
-
-    emit BalanceUpdated(user, token, userBalances[user][token]);
   }
 
   function _ensureUserBalance(address user, address token, uint256 amount) internal view {
@@ -155,29 +180,28 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
   /**
    * @dev Unassigned token balances
    */
-  function skim(address _token, address to) external onlyRole(OPERATOR_ROLE) {
-    IERC20Upgradeable token = IERC20Upgradeable(_token);
+  function skim(address token, address to) external onlyRole(OPERATOR_ROLE) {
     uint256 currentBalance = _contractBalance(token);
-    require(currentBalance > tokenReserves[_token], "NOTHING_TO_SKIM");
+    require(currentBalance > tokenReserves[token], "NOTHING_TO_SKIM");
 
-    token.safeTransfer(to, currentBalance - tokenReserves[_token]);
+    IERC20Upgradeable(token).safeTransfer(to, currentBalance - tokenReserves[token]);
   }
 
   /**
    * @dev deposit unassigned funds to the contract
    */
-  function skimToContract(address _token) external {
-    IERC20Upgradeable token = IERC20Upgradeable(_token);
+  function skimToContract(address token) external {
     uint256 currentBalance = _contractBalance(token);
-    require(currentBalance > tokenReserves[_token], "NOTHING_TO_SKIM");
+    require(currentBalance > tokenReserves[token], "NOTHING_TO_SKIM");
 
-    uint256 amountAdded = currentBalance - tokenReserves[_token];
+    uint256 amountAdded = currentBalance - tokenReserves[token];
 
-    _increaseBalance(_token, address(this), amountAdded);
+    _increaseBalance(token, address(this), amountAdded);
+    emitBalanceUpdated(address(this), token);
   }
 
-  function _contractBalance(IERC20Upgradeable token) internal view returns (uint256) {
-    return token.balanceOf(address(this));
+  function _contractBalance(address erc20TokenAddress) internal view returns (uint256) {
+    return IERC20Upgradeable(erc20TokenAddress).balanceOf(address(this));
   }
 
   /**
@@ -204,8 +228,9 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
       )
     ));
 
-    address signer = ECDSAUpgradeable.recover(structHash, signature);
-    require(signer == withdrawConstraints.user, "INVALID_SIGNATURE");
+    require(
+      SignatureChecker.isValidSignatureNow(withdrawConstraints.user, structHash, signature),
+      "INVALID_SIGNATURE");
 
     userNonces[withdrawConstraints.user] = withdrawConstraints.nonce;
   }
@@ -236,22 +261,23 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
 
   /**
    * @dev Settle emergency withdrawal
-   *      Withdraws all funds from the specified _token
+   *      Withdraws all funds from the specified token
    *      Balance for this token will be set to 0
    *      Emergency withdrawal timer will be reset
    */
-  function settleEmergencyWithdrawal(address _token) external {
+  function settleEmergencyWithdrawal(address token) external {
     address sender = msg.sender;
     {
-      uint256 requestTimestamp = emergencyWithdrawalRequests[sender][_token];
-      emergencyWithdrawalRequests[sender][_token] = 0;
+      uint256 requestTimestamp = emergencyWithdrawalRequests[sender][token];
+      emergencyWithdrawalRequests[sender][token] = 0;
       require(requestTimestamp > 0, "EMERGENCY_WITHDRAWAL_NOT_REQUESTED");
       require(requestTimestamp + withdrawalDelay < block.timestamp, "EMERGENCY_WITHDRAWAL_STILL_IN_PROGRESS");
     }
     {
-      uint256 balance = userBalances[sender][_token];
-      _withdraw(sender, _token, balance, sender);
+      uint256 balance = userBalances[sender][token];
+      _withdraw(sender, token, balance, sender);
+      emitBalanceUpdated(sender, token);
     }
-    emit LogEmergencyWithdrawalSettled(sender, _token);
+    emit LogEmergencyWithdrawalSettled(sender, token);
   }
 }
