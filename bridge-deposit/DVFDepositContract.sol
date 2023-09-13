@@ -14,11 +14,20 @@ contract DVFDepositContract is OwnableUpgradeable {
 
   mapping(address => bool) public authorized;
   mapping(string => bool) public processedWithdrawalIds;
+  bool public depositsDisallowed;
 
   modifier _isAuthorized() {
     require(
       authorized[msg.sender],
       "UNAUTHORIZED"
+    );
+    _;
+  }
+
+  modifier _areDepositsAllowed() {
+    require(
+      !depositsDisallowed,
+      "DEPOSITS_NOT_ALLOWED"
     );
     _;
   }
@@ -32,9 +41,8 @@ contract DVFDepositContract is OwnableUpgradeable {
       !processedWithdrawalIds[withdrawalId],
       "Withdrawal ID Already processed"
     );
-    _;
-
     processedWithdrawalIds[withdrawalId] = true;
+    _;
   }
 
   event BridgedDeposit(address indexed user, address indexed token, uint256 amount);
@@ -48,7 +56,7 @@ contract DVFDepositContract is OwnableUpgradeable {
   /**
     * @dev Deposit ERC20 tokens into the contract address, must be approved
     */
-  function deposit(address token, uint256 amount) external {
+  function deposit(address token, uint256 amount) external _areDepositsAllowed {
     IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
 
     // Explicitly avoid confusion with depositNative as a safety
@@ -57,11 +65,10 @@ contract DVFDepositContract is OwnableUpgradeable {
     emit BridgedDeposit(msg.sender, token, amount);
   }
 
-
   /**
     * @dev Deposit native chain currency into contract address
     */
-  function depositNative() external payable {
+  function depositNative() external payable _areDepositsAllowed {
     emit BridgedDeposit(msg.sender, address(0), msg.value); // Maybe create new events for ETH deposit/withdraw
   }
 
@@ -92,6 +99,17 @@ contract DVFDepositContract is OwnableUpgradeable {
   }
 
   /**
+    * @dev withdraw ERC20 tokens from the contract address
+    * NOTE: only for authorized users
+    */
+  function withdrawV2(address token, address to, uint256 amount) external
+    _isAuthorized
+  {
+    IERC20Upgradeable(token).safeTransfer(to, amount);
+    emit BridgedWithdrawal(to, token, amount, '');
+  }
+
+  /**
     * @dev withdraw native chain currency from the contract address
     * NOTE: only for authorized users
     */
@@ -101,6 +119,18 @@ contract DVFDepositContract is OwnableUpgradeable {
   {
     removeFundsNative(to, amount);
     emit BridgedWithdrawal(to, address(0), amount, withdrawalId);
+  }
+
+  /**
+    * @dev withdraw native chain currency from the contract address
+    * NOTE: only for authorized users
+    */
+  function withdrawNativeV2(address payable to, uint256 amount) external
+    _isAuthorized
+  {
+    (bool success,) = to.call{value: amount}("");
+    require(success, "FAILED_TO_SEND_ETH");
+    emit BridgedWithdrawal(to, address(0), amount, '');
   }
 
   /**
@@ -121,7 +151,7 @@ contract DVFDepositContract is OwnableUpgradeable {
     _isAuthorized
   {
     require(address(this).balance >= amount, "INSUFFICIENT_BALANCE");
-    to.transfer(amount);
+    to.call{value: amount}("");
   }
 
   /**
@@ -133,6 +163,7 @@ contract DVFDepositContract is OwnableUpgradeable {
   }
 
   function transferOwner(address newOwner) external onlyOwner {
+    require(newOwner != owner(), "SAME_OWNER");
     authorized[newOwner] = true;
     authorized[owner()] = false;
     transferOwnership(newOwner);
@@ -141,4 +172,10 @@ contract DVFDepositContract is OwnableUpgradeable {
   function renounceOwnership() public view override onlyOwner {
     require(false, "Unable to renounce ownership");
   }
+
+  function allowDeposits(bool value) external onlyOwner {
+    depositsDisallowed = !value;
+  }
+
+  receive() external payable { }
 }
