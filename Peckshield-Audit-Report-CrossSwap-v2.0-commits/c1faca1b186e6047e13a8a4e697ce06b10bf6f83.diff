@@ -1,0 +1,12 @@
+diff --git a/cross-swap/contracts/UserWallet.sol b/cross-swap/contracts/UserWallet.sol
+index a3afb1ff..e17dda2d 100644
+--- a/cross-swap/contracts/UserWallet.sol
++++ b/cross-swap/contracts/UserWallet.sol
+@@ -97,6 +97,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable, Re
+ 
+     _withdraw(constraints.user, constraints.token, constraints.amount, constraints.to);
+ 
++    emitBalanceUpdated(address(this), constraints.token);
+     emitBalanceUpdated(constraints.user, constraints.token);
+     // TODO find a way to merge this with withdraw
+     emit DelegatedWithdraw(withdrawalId, constraints.user, constraints.token, constraints.amount);
