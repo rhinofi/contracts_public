@@ -1,0 +1,15 @@
+diff --git a/bridge-deposit/contracts/DVFDepositContract.sol b/bridge-deposit/contracts/DVFDepositContract.sol
+index 531e35e0..4dfda5e9 100644
+--- a/bridge-deposit/contracts/DVFDepositContract.sol
++++ b/bridge-deposit/contracts/DVFDepositContract.sol
+@@ -41,9 +41,8 @@ contract DVFDepositContract is OwnableUpgradeable {
+       !processedWithdrawalIds[withdrawalId],
+       "Withdrawal ID Already processed"
+     );
+-    _;
+-
+     processedWithdrawalIds[withdrawalId] = true;
++    _;
+   }
+ 
+   event BridgedDeposit(address indexed user, address indexed token, uint256 amount);
