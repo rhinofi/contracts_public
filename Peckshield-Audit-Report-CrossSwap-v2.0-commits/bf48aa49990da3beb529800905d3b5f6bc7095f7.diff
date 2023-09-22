@@ -1,0 +1,28 @@
+diff --git a/cross-swap/contracts/UserWallet.sol b/cross-swap/contracts/UserWallet.sol
+index 709ac084..a3afb1ff 100644
+--- a/cross-swap/contracts/UserWallet.sol
++++ b/cross-swap/contracts/UserWallet.sol
+@@ -4,12 +4,13 @@ pragma solidity ^0.8.4;
+ import "@openzeppelin/contracts/utils/Counters.sol";
+ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+ import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
++import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+ import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+ import "./Storage.sol";
+ import "./DVFAccessControl.sol";
+ import "./EIP712Upgradeable.sol";
+ 
+-abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
++abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable, ReentrancyGuardUpgradeable {
+   using SafeERC20Upgradeable for IERC20Upgradeable;
+ 
+   event BalanceUpdated(address indexed user, address indexed token, uint256 newBalance);
+@@ -67,7 +68,7 @@ abstract contract UserWallet is Storage, DVFAccessControl, EIP712Upgradeable {
+   /**
+    * @dev Deposit tokens directly into this contract and credit {to}
+    */
+-  function depositTo(address to, address token, uint256 amount) public {
++  function depositTo(address to, address token, uint256 amount) public nonReentrant {
+     uint256 balanceBefore = _contractBalance(token);
+     IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
+     uint256 balanceAfter = _contractBalance(token);
