@@ -1,0 +1,24 @@
+diff --git a/bridge-deposit/contracts/DVFDepositContract.sol b/bridge-deposit/contracts/DVFDepositContract.sol
+index d019f457..531e35e0 100644
+--- a/bridge-deposit/contracts/DVFDepositContract.sol
++++ b/bridge-deposit/contracts/DVFDepositContract.sol
+@@ -164,6 +164,7 @@ contract DVFDepositContract is OwnableUpgradeable {
+   }
+ 
+   function transferOwner(address newOwner) external onlyOwner {
++    require(newOwner != owner(), "SAME_OWNER");
+     authorized[newOwner] = true;
+     authorized[owner()] = false;
+     transferOwnership(newOwner);
+diff --git a/cross-swap/contracts/TransferableAccessControl.sol b/cross-swap/contracts/TransferableAccessControl.sol
+index 329232aa..f7b7d868 100644
+--- a/cross-swap/contracts/TransferableAccessControl.sol
++++ b/cross-swap/contracts/TransferableAccessControl.sol
+@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
+ 
+ abstract contract TransferableAccessControl is AccessControl{
+     function transferRole(bytes32 role, address account) public virtual {
++        require(account != _msgSender(), 'TransferableAccessControl: Can not transfer to self');
+         require(hasRole(role, _msgSender()), 'TransferableAccessControl: sender must have role to transfer');
+         grantRole(role, account);
+         revokeRole(role, _msgSender());
