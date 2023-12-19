@@ -70,6 +70,24 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - MultiSig - N/A
 - Timelock - N/A
 
+#### Manta
+- Bridge [0x2B4553122D960CA98075028d68735cC6b15DeEB5](https://manta-pacific.calderaexplorer.xyz/address/0x2B4553122D960CA98075028d68735cC6b15DeEB5)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
+#### Starknet
+- Bridge [0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8](https://starkscan.co/contract/0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8#portfolio)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
+#### Sroll
+- Bridge [0x87627c7E586441EeF9eE3C28B66662e897513f33](https://scrollscan.com/address/0x87627c7E586441EeF9eE3C28B66662e897513f33)
+- Cross-Swap wallet - N/A
+- MultiSig - N/A
+- Timelock - N/A
+
 ## Cross-Swap Wallet
 
 rhino.fi deploys this self-custodial smart-wallet on several chains, and it holds tokens on behalf of users. rhino.fi can broadcast meta-transactions signed by users in order to swap via aggregators such as Paraswap or invest into yield opportunities such as via Beefy Finance.
