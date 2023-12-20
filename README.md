@@ -77,12 +77,12 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 - Timelock - N/A
 
 #### Starknet
-- Bridge [0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8](https://starkscan.co/contract/0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8#portfolio)
+- Bridge [0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8](https://starkscan.co/contract/0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8)
 - Cross-Swap wallet - N/A
 - MultiSig - N/A
 - Timelock - N/A
 
-#### Sroll
+#### Scroll
 - Bridge [0x87627c7E586441EeF9eE3C28B66662e897513f33](https://scrollscan.com/address/0x87627c7E586441EeF9eE3C28B66662e897513f33)
 - Cross-Swap wallet - N/A
 - MultiSig - N/A
