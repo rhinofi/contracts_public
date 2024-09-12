@@ -3,9 +3,7 @@
     ;; data only to be provided when the storage layout changes
     var cs = get_data().begin_parse();
     var owner = cs~load_msg_addr();
-    ifnot(equal_slice_bits(source_address, owner)) {
-        throw(errorCode::unauthorized); 
-    }
+    throw_unless(errorCode::unauthorized, equal_slice_bits(source_address, owner));
 
     cell code = in_msg_body~load_ref();
     cell data = in_msg_body~load_maybe_ref();
