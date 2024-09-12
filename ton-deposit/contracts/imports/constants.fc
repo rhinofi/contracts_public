@@ -6,6 +6,7 @@ const op::upgrade_with_data = "op::upgradeWithData"c;
 const op::set_deposit_limit = "op::setDepositLimitInfo"c;
 const op::block_global_deposits = "op::blockGlobalDeposits"c;
 const op::transfer_ownership = "op::transferOwnership"c;
+const op::accept_ownership = "op::acceptOwnership"c;
 
 const int log::deposit_native = 0x1;
 const int log::deposit_jetton = 0x2;
