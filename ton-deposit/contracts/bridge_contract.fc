@@ -98,9 +98,15 @@ int is_authorized(addr, authorized_dict) {
         slice forward_payload = in_msg_body~load_int(1) ? in_msg_body~load_ref().begin_parse() : in_msg_body;
         in_msg_body.end_parse();
 
-        ;; if the forward payload is empty, we ignore the message
-        if(forward_payload.slice_empty?()) {
-            return ();
+        ;; check if the bridge jetton wallet is whitelisted
+        var (token_info_cell, found) = deposit_limits_dict.dict_get?(267, source_address);
+
+        ;; security check
+        ;; only messages coming from whitelisted jetton wallets are accepted
+        ;; that contain a 160 bit forward payload (with the evm address)
+        if(~(found) | (slice_bits(forward_payload) != 160)) {
+            return_jettons_to_sender_and_refund_gas(my_balance, msg_value, source_address, query_id, jetton_amount, jetton_sender);
+            return (); 
         }
 
         ;; forward payload should contain the 160 bit evm address
@@ -108,31 +114,13 @@ int is_authorized(addr, authorized_dict) {
         var evm_address = forward_payload~load_uint(160);
         forward_payload.end_parse();
 
-        ;; check if the bridge jetton wallet is whitelisted
-        var (token_info_cell, found) = deposit_limits_dict.dict_get?(267, source_address);
-
-        ;; security check
-        ;; only messages coming from whitelisted jetton wallets are accepted
-        ifnot(found) {
-            reserve_ton(my_balance, msg_value);
-            ;; refund gas to the owner of the wallet that initiated the jetton transfer
-            send_all_contract_balance(jetton_sender);
-            return (); 
-        }
-        
         int limit = token_info_cell~load_coins();
         token_info_cell.end_parse();
 
         ;; if the token exceeds the deposit limit, or deposits are blocked 
         ;; transfer back the jettons to the sender address
         if((jetton_amount > limit) | global_deposits_blocked) {
-            ;; lock the contract balance before sending all balance to the source address with mode 128
-            reserve_ton(my_balance, msg_value);
-
-            ;; the source address has been already checked against a dictionary
-            ;; so it is guaranteed to be a trusted jetton wallet
-            var bridge_jetton_wallet = source_address;
-            send_jetton(query_id, jetton_amount, bridge_jetton_wallet, jetton_sender, jetton_sender, 1, 0, 128);
+            return_jettons_to_sender_and_refund_gas(my_balance, msg_value, source_address, query_id, jetton_amount, jetton_sender);
             return ();
         }
 

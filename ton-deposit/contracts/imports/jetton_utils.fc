@@ -1,3 +1,5 @@
+#include "ton_utils.fc";
+
 () send_jetton(int query_id, int amount, slice source_jetton_wallet, slice destination_user, slice response_destination, int forward_ton_amount, int value, int mode) impure inline {
     if (amount == 0) {
         return ();
@@ -39,4 +41,10 @@
         .end_cell()
     );
     send_raw_message(msg.end_cell(), mode);
+}
+
+() return_jettons_to_sender_and_refund_gas(int my_balance, int msg_value, slice bridge_jetton_wallet, int query_id, int jetton_amount, slice jetton_sender) impure inline {
+    ;; lock the contract balance before sending all balance to the source address with mode 128
+    reserve_ton(my_balance, msg_value);
+    send_jetton(query_id, jetton_amount, bridge_jetton_wallet, jetton_sender, jetton_sender, 1, 0, 128);
 }
