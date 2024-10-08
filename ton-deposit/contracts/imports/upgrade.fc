@@ -1,0 +1,22 @@
+() upgrade_contract_code_and_data(slice source_address, slice in_msg_body) impure {
+    ;; upgrade contract code and data
+    ;; data only to be provided when the storage layout changes
+    var cs = get_data().begin_parse();
+    var owner = cs~load_msg_addr();
+    ifnot(equal_slice_bits(source_address, owner)) {
+        throw(errorCode::unauthorized); 
+    }
+
+    cell code = in_msg_body~load_ref();
+    cell data = in_msg_body~load_maybe_ref();
+    in_msg_body.end_parse();
+    set_code(code);
+    ifnot(null?(data)) {
+        ;; we need to make sure that at least the owner is stored
+        ;; otherwise the contract will be locked
+        if(slice_bits(data.begin_parse()) < 267) {
+            throw(errorCode::invalid_upgrade_data);
+        }
+        set_data(data);
+    }
+}

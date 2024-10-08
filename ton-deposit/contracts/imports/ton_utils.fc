@@ -1,0 +1,37 @@
+#include "constants.fc";
+#include "lib.fc";
+
+() send_ton(slice destination_address, int amount, cell payload, int mode) impure inline {
+    var msg = 
+        begin_cell()
+            .store_uint(0x10, 6)
+            .store_slice(destination_address)
+            .store_coins(amount)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+            .store_maybe_ref(payload)
+        .end_cell();
+    send_raw_message(msg, mode);
+}
+
+() send_all_contract_balance(slice destination_address) impure inline {
+    send_ton(destination_address,0,begin_cell().end_cell(), 128);
+}
+
+() reserve_ton_base(int my_balance, int msg_value, int deposit_value, int withdraw_value) impure inline {
+    var deposit_gas = (msg_value - deposit_value); ;; msg_value = deposit_amount + deposit_gas
+    ;; when deposit is 0, all attached coins are used for gas
+    var contract_reserves = my_balance - deposit_gas - withdraw_value;
+    raw_reserve(contract_reserves + storage_fees(), 0);
+}
+
+() reserve_ton(int my_balance, int msg_value) impure inline {
+    reserve_ton_base(my_balance, msg_value, 0, 0);
+}
+
+() reserve_ton_with_deposit(int my_balance, int msg_value, int deposit_value) impure inline {
+    reserve_ton_base(my_balance, msg_value, deposit_value, 0);
+}
+
+() reserve_ton_with_withdrawal(int my_balance, int msg_value, int withdraw_value) impure inline {
+    reserve_ton_base(my_balance, msg_value, 0, withdraw_value);
+}

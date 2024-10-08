@@ -1,0 +1,17 @@
+const op::deposit_native = "op::depositNative"c;
+const op::withdraw_jetton = "op::withdraw"c;
+const op::withdraw_native = "op::withdrawNative"c;
+const op::authorize = "op::authorize"c;
+const op::upgrade_with_data = "op::upgradeWithData"c;
+const op::set_deposit_limit = "op::setDepositLimitInfo"c;
+const op::block_global_deposits = "op::blockGlobalDeposits"c;
+const op::transfer_ownership = "op::transferOwnership"c;
+
+const int log::deposit_native = 0x1;
+const int log::deposit_jetton = 0x2;
+
+const int errorCode::insufficient_balance = 0xaaaa;
+const int errorCode::unauthorized = 0xbbbb;
+const int errorCode::invalid_upgrade_data = 0xcccc;
+
+const const::min_contract_balance = 5000000000; ;; 5 TON

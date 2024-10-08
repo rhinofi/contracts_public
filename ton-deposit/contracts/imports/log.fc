@@ -1,0 +1,14 @@
+() emit_log(slice log) impure inline_ref {
+    var msg = 
+        begin_cell()
+            ;; https://docs.ton.org/develop/data-formats/msg-tlb#ext_out_msg_info11
+            .store_uint(3, 2) ;; ext_out_msg_info$11 src:MsgAddressInt ()
+                ;; https://docs.ton.org/develop/data-formats/msg-tlb#addr_none00
+                .store_uint(0, 2) ;; addr_none$00
+                ;; https://docs.ton.org/develop/data-formats/msg-tlb#addr_none00
+                .store_uint(0, 2) ;; addr_none$00
+            .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
+            .store_slice(log)
+        .end_cell();
+    send_raw_message(msg, 0);
+}
