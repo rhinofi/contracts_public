@@ -1,0 +1,42 @@
+() send_jetton(int query_id, int amount, slice source_jetton_wallet, slice destination_user, slice response_destination, int forward_ton_amount, int value, int mode) impure inline {
+    if (amount == 0) {
+        return ();
+    }
+    ;; instead of calculating the jetton wallet address on the contract
+    ;; it is calculated by the backend and sent to the contract
+    var msg = begin_cell()
+    ;; 011010
+    ;; nobounce - int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool 
+    .store_uint(0x18, 6) ;; bounce: true
+    ;; address of the source jetton wallet
+    ;; this is the address of the jetton wallet and not the address of the user
+    ;; the backend will calculate the address
+    .store_slice(source_jetton_wallet)
+    ;; value of the jetton to be sent
+    .store_coins(value)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+    .store_maybe_ref(
+        ;; https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md#1-transfer
+        begin_cell()
+            .store_uint(op::transfer(), 32)
+            .store_uint(query_id, 64)
+            .store_coins(amount)
+            ;; destination_user: 
+            ;; address of the new owner of the jettons
+            ;; this is the address of the user and not the address of the jetton wallet
+            .store_slice(destination_user)
+            ;; response_destination
+            ;; address where to send a response with confirmation of a 
+            ;; successful transfer and the rest of the incoming message Toncoins.
+            .store_slice(response_destination)
+            ;; custom payload
+            .store_uint(0, 1)
+            ;; the amount of nanotons to be sent to the destination address
+            ;; used by withdraw with native to send tokens to the owner
+            .store_coins(forward_ton_amount)
+            ;; forward_payload
+            .store_uint(0, 1)
+        .end_cell()
+    );
+    send_raw_message(msg.end_cell(), mode);
+}
