@@ -14,6 +14,8 @@ _ load_contract_data() {
     ;; /!\ owner should be always the first field in the data
     ;; /!\ otherwise the upgrade will not work
     cs~load_msg_addr(),
+    ;; pending owner
+    cs~load_msg_addr(),
     ;; authorized list
     cs~load_dict(),
     ;; deposit limits
@@ -26,23 +28,26 @@ _ load_contract_data() {
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_contract_data(slice owner, cell authorized_list, cell deposit_limits, int global_deposits_blocked) impure {
+() save_contract_data(slice owner, slice pending_owner, cell authorized_dict, cell deposit_limits_dict, int global_deposits_blocked) impure {
     set_data(
         begin_cell()
             ;; /!\ owner should be always the first field in the data
             ;; /!\ otherwise the upgrade will not work
             .store_slice(owner)
-            .store_dict(authorized_list)
-            .store_dict(deposit_limits)
+            ;; pending owner
+            ;; only used for the two step transfer ownership process
+            .store_slice(pending_owner)
+            .store_dict(authorized_dict)
+            .store_dict(deposit_limits_dict)
             .store_int(global_deposits_blocked, 1)
         .end_cell()
     );
 }
 
-(cell) remove_dict_address_key_if_exists(slice key, cell dict) {
-    (_, int found) = dict.dict_get?(267, key);
+(cell) remove_dict_address_key_if_exists(slice address, cell dict) {
+    (_, int found) = dict.dict_get?(267, address);
     if(found) {
-        dict~dict_delete?(267, key);
+        dict~dict_delete?(267, address);
     }
     return dict;
 }
@@ -80,7 +85,7 @@ int is_authorized(addr, authorized_dict) {
         return ();
     }
 
-    (slice owner, cell authorized_dict, cell deposit_limits_dict, int global_deposits_blocked) = load_contract_data();
+    (slice owner, slice pending_owner, cell authorized_dict, cell deposit_limits_dict, int global_deposits_blocked) = load_contract_data();
 
     ;; entry point when we receive a jetton transfer notification from our jetton wallet
     ;; this is where jetton deposits are processed
@@ -93,9 +98,15 @@ int is_authorized(addr, authorized_dict) {
         slice forward_payload = in_msg_body~load_int(1) ? in_msg_body~load_ref().begin_parse() : in_msg_body;
         in_msg_body.end_parse();
 
-        ;; if the forward payload is empty, we ignore the message
-        if(forward_payload.slice_empty?()) {
-            return ();
+        ;; check if the bridge jetton wallet is whitelisted
+        var (token_info_cell, found) = deposit_limits_dict.dict_get?(267, source_address);
+
+        ;; security check
+        ;; only messages coming from whitelisted jetton wallets are accepted
+        ;; that contain a 160 bit forward payload (with the evm address)
+        if(~(found) | (slice_bits(forward_payload) != 160)) {
+            return_jettons_to_sender_and_refund_gas(my_balance, msg_value, source_address, query_id, jetton_amount, jetton_sender);
+            return (); 
         }
 
         ;; forward payload should contain the 160 bit evm address
@@ -103,31 +114,13 @@ int is_authorized(addr, authorized_dict) {
         var evm_address = forward_payload~load_uint(160);
         forward_payload.end_parse();
 
-        ;; check if the bridge jetton wallet is whitelisted
-        var (token_info_cell, found) = deposit_limits_dict.dict_get?(267, source_address);
-
-        ;; security check
-        ;; only messages coming from whitelisted jetton wallets are accepted
-        ifnot(found) {
-            reserve_ton(my_balance, msg_value);
-            ;; refund gas to the owner of the wallet that initiated the jetton transfer
-            send_all_contract_balance(jetton_sender);
-            return (); 
-        }
-        
         int limit = token_info_cell~load_coins();
         token_info_cell.end_parse();
 
         ;; if the token exceeds the deposit limit, or deposits are blocked 
         ;; transfer back the jettons to the sender address
         if((jetton_amount > limit) | global_deposits_blocked) {
-            ;; lock the contract balance before sending all balance to the source address with mode 128
-            reserve_ton(my_balance, msg_value);
-
-            ;; the source address has been already checked against a dictionary
-            ;; so it is guaranteed to be a trusted jetton wallet
-            var bridge_jetton_wallet = source_address;
-            send_jetton(query_id, jetton_amount, bridge_jetton_wallet, jetton_sender, jetton_sender, 1, 0, 128);
+            return_jettons_to_sender_and_refund_gas(my_balance, msg_value, source_address, query_id, jetton_amount, jetton_sender);
             return ();
         }
 
@@ -177,9 +170,8 @@ int is_authorized(addr, authorized_dict) {
 
         ;; the specified amount in the message body should be less
         ;; than the TON coins attached in the message
-        if(amount > msg_value) {
-            throw(errorCode::insufficient_balance);
-        }
+        throw_if(errorCode::insufficient_balance, amount > msg_value);
+
         var msg_body = 
             begin_cell()
                 .store_uint(log::deposit_native, 32)
@@ -197,9 +189,7 @@ int is_authorized(addr, authorized_dict) {
 
     ;; only authorized addresses can withdraw Jettons
     if (op == op::withdraw_jetton) {
-        ifnot(is_authorized(source_address,authorized_dict)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, is_authorized(source_address,authorized_dict));
         slice contract_jetton_wallet = in_msg_body~load_msg_addr();
         int amount = in_msg_body~load_coins();
         slice destination_jetton_wallet = in_msg_body~load_msg_addr();
@@ -207,10 +197,8 @@ int is_authorized(addr, authorized_dict) {
         int forward_ton_amount = in_msg_body~load_coins();
         in_msg_body.end_parse();
 
-        if(my_balance - msg_value - forward_ton_amount < const::min_contract_balance) {
-            throw(errorCode::insufficient_balance);
-        }
-        
+        throw_if(errorCode::insufficient_balance, my_balance - msg_value - forward_ton_amount < const::min_contract_balance);
+
         reserve_ton_with_withdrawal(my_balance, msg_value, forward_ton_amount);
         send_jetton(query_id, amount, contract_jetton_wallet, destination_jetton_wallet, response_destination, forward_ton_amount, 0, 128);
         return ();
@@ -218,16 +206,12 @@ int is_authorized(addr, authorized_dict) {
 
     ;; only authorized addresses can withdraw TON
     if (op == op::withdraw_native) {
-        ifnot(is_authorized(source_address,authorized_dict)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, is_authorized(source_address,authorized_dict));
         slice withdrawal_address = in_msg_body~load_msg_addr();
         int amount = in_msg_body~load_coins();
         in_msg_body.end_parse();
 
-        if(my_balance - msg_value - amount < const::min_contract_balance) {
-            throw(errorCode::insufficient_balance);
-        }
+        throw_if(errorCode::insufficient_balance, my_balance - msg_value - amount < const::min_contract_balance);
 
         reserve_ton_with_withdrawal(my_balance, msg_value, amount);
         send_ton(withdrawal_address, amount, begin_cell().end_cell(), 1);
@@ -242,16 +226,14 @@ int is_authorized(addr, authorized_dict) {
     ;; current contract address (my_address()) is used as special address key to set TON deposits limits
     ;; other addresses refer to the bridge jetton wallet (not jetton master)
     if(op == op::set_deposit_limit) {
-        ifnot(is_authorized(source_address,authorized_dict)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, is_authorized(source_address,authorized_dict));
         var jetton_wallet_address = in_msg_body~load_msg_addr();
         ;; use '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF' to disable limits
         int limit = in_msg_body~load_coins();
         in_msg_body.end_parse();
 
         deposit_limits_dict~dict_set(267, jetton_wallet_address, begin_cell().store_coins(limit).end_cell().begin_parse());
-        save_contract_data(owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
+        save_contract_data(owner, pending_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
         reserve_ton(my_balance, msg_value);
         send_all_contract_balance(source_address);
         return ();
@@ -261,12 +243,10 @@ int is_authorized(addr, authorized_dict) {
     ;; 0 -> resume deposits, restrictions on deposit limits and allowed tokens apply
     ;;      restrictions are set with op::set_deposit_limit
     if(op == op::block_global_deposits) {
-        ifnot(is_authorized(source_address,authorized_dict)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, is_authorized(source_address,authorized_dict));
         var global_deposits_blocked = in_msg_body~load_int(1);
         in_msg_body.end_parse();
-        save_contract_data(owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
+        save_contract_data(owner, pending_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
         reserve_ton(my_balance, msg_value);
         send_all_contract_balance(source_address);
         return ();
@@ -274,9 +254,7 @@ int is_authorized(addr, authorized_dict) {
 
     ;; only the owner can set authorized addresses
     if(op == op::authorize) {
-        ifnot(equal_slice_bits(source_address, owner)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, equal_slice_bits(source_address, owner));
         slice authorized_address = in_msg_body~load_msg_addr();
         int authorized = in_msg_body~load_int(1);
 
@@ -285,44 +263,50 @@ int is_authorized(addr, authorized_dict) {
         } else {
             authorized_dict~dict_set(267, authorized_address, begin_cell().end_cell().begin_parse());
         }
-        save_contract_data(owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
+        save_contract_data(owner, pending_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
         reserve_ton(my_balance, msg_value);
         send_all_contract_balance(source_address);
         return();
     }
 
     if(op == op::transfer_ownership) {
-        ifnot(equal_slice_bits(source_address, owner)) {
-            throw(errorCode::unauthorized);
-        }
+        throw_unless(errorCode::unauthorized, equal_slice_bits(source_address, owner));
         var new_owner = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
-        save_contract_data(new_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
+        save_contract_data(owner, new_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
         reserve_ton(my_balance, msg_value);
         send_all_contract_balance(source_address);
         return();
     }
 
+    if(op == op::accept_ownership) {
+        throw_unless(errorCode::unauthorized, equal_slice_bits(source_address, pending_owner));
+        in_msg_body.end_parse();
+        save_contract_data(pending_owner, pending_owner, authorized_dict, deposit_limits_dict, global_deposits_blocked);
+        reserve_ton(my_balance, msg_value);
+        send_all_contract_balance(source_address);
+        return();
+    }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
 }
 
-(slice, cell, cell, int) get_contract_data() method_id {
+(slice, slice, cell, cell, int) get_contract_data() method_id {
     return load_contract_data();
 }
 
 int is_address_authorized(slice addr) method_id {
-    (_, cell authorized_dict, _, _) = load_contract_data();
+    (_, _, cell authorized_dict, _, _) = load_contract_data();
     return is_authorized(addr, authorized_dict);
 }
 
 int are_global_deposits_blocked() method_id {
-    (_, _, _, int global_deposits_blocked) = load_contract_data();
+    (_, _, _, _, int global_deposits_blocked) = load_contract_data();
     return global_deposits_blocked;
 }
 
 (int, int) get_deposit_limit(slice jetton_wallet_address) method_id {
-    (_, _, cell deposit_limits_dict, _) = load_contract_data();
+    (_, _, _, cell deposit_limits_dict, _) = load_contract_data();
     (slice deposit_limit, int found) = deposit_limits_dict.dict_get?(267, jetton_wallet_address);
     ifnot (found) {
         return (0, false);
@@ -331,7 +315,7 @@ int are_global_deposits_blocked() method_id {
 }
 
 slice get_owner() method_id {
-    (slice owner, _, _, _) = load_contract_data();
+    (slice owner, _, _, _, _) = load_contract_data();
     return owner;
 }
 

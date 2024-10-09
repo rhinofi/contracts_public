@@ -3,20 +3,22 @@
     ;; data only to be provided when the storage layout changes
     var cs = get_data().begin_parse();
     var owner = cs~load_msg_addr();
-    ifnot(equal_slice_bits(source_address, owner)) {
-        throw(errorCode::unauthorized); 
-    }
+    throw_unless(errorCode::unauthorized, equal_slice_bits(source_address, owner));
 
     cell code = in_msg_body~load_ref();
     cell data = in_msg_body~load_maybe_ref();
     in_msg_body.end_parse();
+
+    throw_if(errorCode::invalid_upgrade_data, code.begin_parse().slice_empty?());
+
     set_code(code);
+
     ifnot(null?(data)) {
-        ;; we need to make sure that at least the owner is stored
-        ;; otherwise the contract will be locked
-        if(slice_bits(data.begin_parse()) < 267) {
-            throw(errorCode::invalid_upgrade_data);
-        }
+        throw_if(errorCode::invalid_upgrade_data, data.begin_parse().slice_empty?());
+        slice data_slice = data.begin_parse();
+        slice new_owner_address = data_slice~load_msg_addr();
+        ;; owner can only be changed by transfer_ownership
+        throw_unless(errorCode::invalid_upgrade_data, equal_slice_bits(owner, new_owner_address));
         set_data(data);
     }
 }
