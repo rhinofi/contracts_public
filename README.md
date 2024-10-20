@@ -85,7 +85,7 @@ Pure solidity repository of rhino.fi's contracts. No dependencies are included a
 #### Scroll
 - Bridge [0x87627c7E586441EeF9eE3C28B66662e897513f33](https://scrollscan.com/address/0x87627c7E586441EeF9eE3C28B66662e897513f33)
 - Cross-Swap wallet - N/A
-- MultiSig - N/A
+- MultiSig - [0x5Af8dEcb972c01540B252c6a870De5B276026276](https://scrollscan.com/address/0x5Af8dEcb972c01540B252c6a870De5B276026276)
 - Timelock - N/A
 
 ## Cross-Swap Wallet
