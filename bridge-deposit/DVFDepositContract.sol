@@ -3,6 +3,7 @@ pragma solidity >=0.4.22 <0.9.0;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/draft-IERC20PermitUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "./BridgeVM.sol";
 
@@ -36,9 +37,10 @@ contract DVFDepositContract is OwnableUpgradeable {
   }
 
   event BridgedDeposit(address indexed user, address indexed token, uint256 amount);
-  event BridgedWithdrawal(address indexed user, address indexed token, uint256 amount, string withdrawalId);
-  event BridgedWithdrawalWithNative(address indexed user, address indexed token, uint256 amountToken, uint256 amountNative);
-  event BridgedWithdrawalWithData(address indexed token, uint256 amountToken, uint256 amountNative, bytes ref);
+  event BridgedDepositWithId(address sender, address origin, address token, uint256 amount, uint256 commitmentId);
+  event BridgedWithdrawal(address user, address token, uint256 amount, string withdrawalId);
+  event BridgedWithdrawalWithNative(address user, address token, uint256 amountToken, uint256 amountNative);
+  event BridgedWithdrawalWithData(address token, uint256 amountToken, uint256 amountNative, bytes ref);
 
   function initialize() public virtual initializer {
     __Ownable_init();
@@ -74,6 +76,26 @@ contract DVFDepositContract is OwnableUpgradeable {
 
     emit BridgedDeposit(msg.sender, token, amount);
   }
+  /**
+    * @dev Deposit ERC20 tokens to the contract address with a commitment ID
+    * NOTE: An invalid commitment ID will result in a deposit not being processed
+    * NOTE: Users must use Rhino.Fi UI to get a valid commitment ID
+    */
+  function depositWithId(address token, uint256 amount, uint256 commitmentId) public {
+    require(token != address(0), 'BLACKHOLE_NOT_ALLOWED');
+    IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
+    emit BridgedDepositWithId(msg.sender, tx.origin, token, amount, commitmentId);
+  }
+
+  /**
+    * @dev Deposit ERC20 tokens to the contract address with permit signature a commitment ID
+    * NOTE: An invalid commitment ID will result in a deposit not being processed
+    * NOTE: Users must use Rhino.Fi UI to get a valid commitment ID
+    */
+  function depositWithPermit(address token, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s, uint256 commitmentId) external {
+    IERC20PermitUpgradeable(token).permit(msg.sender, address(this), amount, deadline, v, r, s);
+    depositWithId(token, amount, commitmentId);
+  }
 
   /**
     * @dev Deposit native chain currency into contract address
@@ -81,6 +103,15 @@ contract DVFDepositContract is OwnableUpgradeable {
   function depositNative() external payable _areDepositsAllowed {
     checkMaxDepositAmount(address(0), msg.value);
     emit BridgedDeposit(msg.sender, address(0), msg.value); // Maybe create new events for ETH deposit/withdraw
+  }
+
+  /**
+    * @dev Deposit native chain currency into contract address with a commitment ID
+    * NOTE: An invalid commitment ID will result in a deposit not being processed
+    * NOTE: Users must use Rhino.Fi UI to get a valid commitment ID
+    */
+  function depositNativeWithId(uint256 commitmentId) external payable {
+    emit BridgedDepositWithId(msg.sender, tx.origin, address(0), msg.value, commitmentId); 
   }
 
   /**
@@ -122,6 +153,23 @@ contract DVFDepositContract is OwnableUpgradeable {
   }
 
   /**
+    * @dev withdraw ERC20 tokens from the contract address and sends native chain currency
+    * NOTE: only for authorized users
+    */
+ function withdrawV2WithNativeNoEvent(address token, address to, uint256 amountToken, uint256 amountNative) external
+    _isAuthorized
+  {
+    if(amountNative > 0) {
+      (bool success,) = to.call{value: amountNative}("");
+      require(success, "FAILED_TO_SEND_ETH");
+    }
+    if(amountToken > 0 && token != address(0)) {
+      IERC20Upgradeable(token).safeTransfer(to, amountToken);
+    }
+  }
+
+
+  /**
     * @dev withdraw native chain currency from the contract address
     * NOTE: only for authorized users
     */
@@ -133,15 +181,36 @@ contract DVFDepositContract is OwnableUpgradeable {
     emit BridgedWithdrawal(to, address(0), amount, '');
   }
 
- function withdrawWithData(address token, uint256 amount, uint256 amountNative, BridgeVM.Call[] calldata datas, bytes calldata ref)
+  /**
+    * @dev withdraw executing custom call
+    * NOTE: only for authorized users
+    */
+  function _withdrawWithData(address token, uint256 amount, uint256 amountNative, BridgeVM.Call[] calldata datas) internal {
+    require(address(vm) != address(0), 'VM_DOES_NOT_EXIST');
+    if (address(token) != address(0)) {
+      IERC20Upgradeable(token).safeTransfer(address(vm), amount);
+    }
+
+    vm.execute{value: amountNative}(datas);
+  }
+
+  /**
+    * @dev withdraw executing custom call
+    * NOTE: only for authorized users
+    */
+  function withdrawWithData(address token, uint256 amount, uint256 amountNative, BridgeVM.Call[] calldata datas, bytes calldata ref)
     external
     _isAuthorized
   {
-    require(address(vm) != address(0), 'VM_DOES_NOT_EXIST');
-    IERC20Upgradeable(token).safeTransfer(address(vm), amount);
-    vm.execute{value: amountNative}(datas);
-
+    _withdrawWithData(token, amount, amountNative, datas);
     emit BridgedWithdrawalWithData(token, amount, amountNative, ref);
+  }
+
+  function withdrawWithDataNoEvent(address token, uint256 amount, uint256 amountNative, BridgeVM.Call[] calldata datas)
+    external
+    _isAuthorized
+  {
+    _withdrawWithData(token, amount, amountNative, datas);
   }
 
   /**
@@ -171,6 +240,16 @@ contract DVFDepositContract is OwnableUpgradeable {
     */
   function authorize(address user, bool value) external onlyOwner {
     authorized[user] = value;
+  }
+
+  /**
+    * @dev add or remove authorized users
+    * NOTE: only owner
+    */
+  function authorizeMulti(address[] calldata users, bool value) external onlyOwner {
+    for (uint256 i = 0; i < users.length; i++) {
+      authorized[users[i]] = value;
+    }
   }
 
   function transferOwner(address newOwner) external onlyOwner {
